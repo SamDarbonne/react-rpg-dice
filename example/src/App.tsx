@@ -1,13 +1,10 @@
-import "./App.css";
 import Roller from "../../src/index";
 
 function App() {
   return (
     <div>
-      <Roller
-        timeoutMultipliers={{ 1: 1, 3: 3 }}
-        callback={(results) => console.log(results)}
-      />
+      <Roller callback={(results) => console.log(results)} />
+      <br />
       <Roller
         orientation="vertical"
         timeoutMultipliers={{ 1: 1, 3: 3 }}

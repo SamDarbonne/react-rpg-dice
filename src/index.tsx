@@ -4,10 +4,6 @@ import "./index.css";
 
 console.log("roller");
 const DEFAULT_TIMEOUT = 1000;
-const DEFAULT_TIMEOUT_MULTIPLIERS: TimeoutsMap = {
-  1: 1,
-  3: 3,
-};
 
 export interface RollerProps {
   callback: (results: Result[]) => void;
@@ -76,7 +72,7 @@ const rollDie = (sides: number) => {
 
 const Roller: React.FC<RollerProps> = ({
   dice = [4, 6, 8, 10, 12, 20],
-  timeoutMultipliers = DEFAULT_TIMEOUT_MULTIPLIERS,
+  timeoutMultipliers,
   callback,
   diceRollFn,
   defaultTimeout,
