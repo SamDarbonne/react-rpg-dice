@@ -4,17 +4,15 @@ import "./index.css";
 
 console.log("roller");
 const DEFAULT_TIMEOUT = 1000;
-
-export type Result = { result: number; sides: number; bonus: number };
-
-interface TimeoutsMap {
-  [key: number]: number;
-}
+const DEFAULT_TIMEOUT_MULTIPLIERS: TimeoutsMap = {
+  1: 1,
+  3: 3,
+};
 
 export interface RollerProps {
   callback: (results: Result[]) => void;
   orientation?: "vertical" | "horizontal";
-  timeouts?: TimeoutsMap;
+  timeoutMultipliers?: TimeoutsMap;
   diceRollFn?: (sides: number) => number;
   dice?: number[];
   defaultTimeout?: number;
@@ -31,20 +29,10 @@ type DieButtonProps = {
   handleClick: (sides: number) => () => void;
 };
 
-const findTimeoutMultiplier = (timeouts: TimeoutsMap, clickCount: number) => {
-  const keys: number[] = Object.keys(timeouts).map((k) => parseInt(k));
-  let timeoutMultiplier = 1;
-  for (const key of keys) {
-    if (key <= clickCount) timeoutMultiplier = timeouts[key];
-    else return timeoutMultiplier;
-  }
-  return timeoutMultiplier;
-};
-
 const DieButton = ({ sides, handleClick }: DieButtonProps) => {
   // const icon = iconMap[sides] ? iconMap[sides] : D12Icon;
   return (
-    <div>
+    <div className="die-button-wrapper">
       <div onClick={handleClick(sides)} className="die-button">
         {/* <img
             className="h-8 m-1 fill-current stroke-width-1 stroke-black text-red"
@@ -57,13 +45,38 @@ const DieButton = ({ sides, handleClick }: DieButtonProps) => {
   );
 };
 
-const rollDie: (sides: number) => number = (sides) => {
+export type Result = { result: number; sides: number; bonus: number };
+
+interface TimeoutsMap {
+  [key: number]: number;
+}
+
+export interface RollerProps {
+  callback: (results: Result[]) => void;
+  orientation?: "vertical" | "horizontal";
+  timeouts?: TimeoutsMap;
+  diceRollFn?: (sides: number) => number;
+  dice?: number[];
+  defaultTimeout?: number;
+}
+
+const findTimeoutMultiplier = (timeouts: TimeoutsMap, clickCount: number) => {
+  const keys: number[] = Object.keys(timeouts).map((k) => parseInt(k));
+  let timeoutMultiplier = 1;
+  for (const key of keys) {
+    if (key <= clickCount) timeoutMultiplier = timeouts[key];
+    else return timeoutMultiplier;
+  }
+  return timeoutMultiplier;
+};
+
+const rollDie = (sides: number) => {
   return Math.floor(Math.random() * sides) + 1;
 };
 
 const Roller: React.FC<RollerProps> = ({
   dice = [4, 6, 8, 10, 12, 20],
-  timeouts,
+  timeoutMultipliers = DEFAULT_TIMEOUT_MULTIPLIERS,
   callback,
   diceRollFn,
   defaultTimeout,
@@ -78,11 +91,11 @@ const Roller: React.FC<RollerProps> = ({
   const debounceTimeout = defaultTimeout || DEFAULT_TIMEOUT;
   const clickCount = clicks.length;
   const waiting = clickCount > 0;
-  const timeout = timeouts
-    ? findTimeoutMultiplier(timeouts, clickCount) * debounceTimeout
+  const timeout = timeoutMultipliers
+    ? findTimeoutMultiplier(timeoutMultipliers, clickCount) * debounceTimeout
     : debounceTimeout;
 
-  const makeRolls = async () => {
+  const makeRolls = () => {
     setClicks((currentClicks) => {
       const output: Result[] = currentClicks.map(({ sides }) => ({
         result: diceRollFn ? diceRollFn(sides) : rollDie(sides),
@@ -92,7 +105,7 @@ const Roller: React.FC<RollerProps> = ({
       callback(output);
       return [];
     });
-    setLoadingWidth(0); // Reset the loading width after rolling
+    setLoadingWidth(0);
   };
 
   const handleClick = (sides: number) => {
@@ -121,15 +134,17 @@ const Roller: React.FC<RollerProps> = ({
           const increment = 100 / (timeout / 10);
           const newWidth = prevWidth + increment;
 
+          // Trigger roll immediately when the bar reaches 100%
           if (newWidth >= 100) {
             clearInterval(intervalRef.current);
             intervalRef.current = undefined;
+            makeRolls(); // Roll as soon as loading is complete
             return 100;
           }
 
           return newWidth;
         });
-      }, 0) as unknown as NodeJS.Timeout;
+      }, 10) as unknown as NodeJS.Timeout; // Adjust the interval timing to avoid delays
     }
 
     return () => {
@@ -141,6 +156,7 @@ const Roller: React.FC<RollerProps> = ({
   }, [clicks, timeout]);
 
   const rushRoll = () => {
+    console.log("rushing roll");
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
@@ -149,7 +165,7 @@ const Roller: React.FC<RollerProps> = ({
       clearInterval(intervalRef.current);
       intervalRef.current = undefined;
     }
-    setLoadingWidth(100);
+    setLoadingWidth(100); // Ensure the bar is full when rushed
     makeRolls();
   };
 
@@ -157,11 +173,11 @@ const Roller: React.FC<RollerProps> = ({
     <div className={`roller-wrapper-${orientation}`}>
       <div>
         <button
-          disabled={true}
+          disabled={!waiting}
           onClick={rushRoll}
           className={`${waiting ? "loading-button" : ""} roll-button`}
         >
-          <div className="roll-button-text">Roll</div>
+          Roll
           <div
             className="timer-indicator"
             style={{

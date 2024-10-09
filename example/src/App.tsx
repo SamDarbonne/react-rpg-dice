@@ -5,12 +5,12 @@ function App() {
   return (
     <div>
       <Roller
-        timeouts={{ 1: 2, 3: 4 }}
+        timeoutMultipliers={{ 1: 1, 3: 3 }}
         callback={(results) => console.log(results)}
       />
       <Roller
         orientation="vertical"
-        timeouts={{ 1: 2, 3: 4 }}
+        timeoutMultipliers={{ 1: 1, 3: 3 }}
         callback={(results) => console.log(results)}
       />
     </div>
