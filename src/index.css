@@ -1,0 +1,125 @@
+@tailwind base;
+
+.roller-wrapper-horizontal,
+.roller-wrapper-vertical {
+  display: flex;
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  border-width: 1px;
+}
+
+.roller-wrapper-vertical {
+  flex-direction: column;
+  width: fit-content;
+  align-items: center;
+}
+
+.roller-wrapper-horizontal {
+  flex-direction: row;
+  height: fit-content;
+  width: fit-content;
+}
+
+.roller-wrapper-vertical .bonus-container,
+.roller-wrapper-vertical .die-button {
+  margin-top: 0.5rem;
+}
+
+.die-button {
+  cursor: pointer;
+  user-select: none;
+  height: 2.5rem;
+  width: fit-content;
+  padding: 0 0.5rem;
+  max-width: 5rem;
+  display: flex;
+  flex-direction: row;
+  max-height: 2.5rem;
+  border-width: 1px;
+  transition: all 0.2s ease-in-out;
+  border-radius: 0.125rem;
+  background-color: #ffffff;
+}
+
+.die-button:hover {
+  border-color: #9ca3af;
+  background-color: #f9fafb;
+}
+
+.die-button:active {
+  background-color: #e5e7eb;
+  color: #1f2937;
+}
+
+.die-button-btn {
+  border-radius: 0.125rem;
+  color: #000000;
+  align-content: center;
+}
+
+.roll-button {
+  padding: 0.5rem 0 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #ffffff;
+  color: #000000;
+  cursor: pointer;
+  border-width: 1px;
+  border-radius: 0.125rem;
+  width: 5rem;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.roll-button:hover {
+  background-color: #f9fafb;
+}
+
+.roll-button:active {
+  background-color: #e5e7eb;
+}
+
+.roll-button-text {
+  padding-bottom: 0.2rem;
+}
+
+.timer-indicator {
+  background-color: #22c55e;
+  align-self: baseline;
+  height: 0.25rem;
+}
+
+.bonus-container {
+  display: flex;
+  flex-direction: row;
+}
+
+.bonus-button-row {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  max-width: 5rem;
+  margin-bottom: 0.5rem;
+}
+
+.bonus-input {
+  width: 2rem;
+  text-align: center;
+  border-width: 1px;
+  border-radius: 0.125rem;
+}
+
+.bonus-button {
+  height: 0.5rem;
+  margin: 0;
+  border: 1px solid black;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
+}

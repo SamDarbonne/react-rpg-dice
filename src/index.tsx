@@ -1,13 +1,9 @@
-import React, {
-  ReactElement,
-  ReactHTMLElement,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import React, { useEffect, useRef, useState } from "react";
+
+import "./index.css";
 
 console.log("roller");
-const DEBOUNCE_TIMEOUT = 1000;
+const DEFAULT_TIMEOUT = 1000;
 
 export type Result = { result: number; sides: number; bonus: number };
 
@@ -17,9 +13,11 @@ interface TimeoutsMap {
 
 export interface RollerProps {
   callback: (results: Result[]) => void;
+  orientation?: "vertical" | "horizontal";
   timeouts?: TimeoutsMap;
   diceRollFn?: (sides: number) => number;
   dice?: number[];
+  defaultTimeout?: number;
 }
 
 type IconUrl = string;
@@ -33,30 +31,27 @@ type DieButtonProps = {
   handleClick: (sides: number) => () => void;
 };
 
-const findTimeout = (timeouts: TimeoutsMap, clickCount: number) => {
+const findTimeoutMultiplier = (timeouts: TimeoutsMap, clickCount: number) => {
   const keys: number[] = Object.keys(timeouts).map((k) => parseInt(k));
-  let timeout = 0;
+  let timeoutMultiplier = 1;
   for (const key of keys) {
-    if (timeouts[key] < clickCount) timeout = timeouts[key];
-    else return timeout;
+    if (key <= clickCount) timeoutMultiplier = timeouts[key];
+    else return timeoutMultiplier;
   }
-  return timeout;
+  return timeoutMultiplier;
 };
 
 const DieButton = ({ sides, handleClick }: DieButtonProps) => {
   // const icon = iconMap[sides] ? iconMap[sides] : D12Icon;
   return (
     <div>
-      <div
-        onClick={handleClick(sides)}
-        className="hover:cursor-pointer select-none hover:border-gray-400 hover:bg-gray-50 active:bg-gray-200 active:text-gray-800 h-10 max-w-20 flex flex-row max-h-10 mb-2 border transition rounded-sm bg-white"
-      >
+      <div onClick={handleClick(sides)} className="die-button">
         {/* <img
             className="h-8 m-1 fill-current stroke-width-1 stroke-black text-red"
             src={icon}
             alt=""
           /> */}
-        <div className="btn rounded-sm text-black ml-2 mt-2">{`d${sides}`}</div>
+        <div className="die-button-btn">{`d${sides}`}</div>
       </div>
     </div>
   );
@@ -66,42 +61,38 @@ const rollDie: (sides: number) => number = (sides) => {
   return Math.floor(Math.random() * sides) + 1;
 };
 
-const Roller: (props: RollerProps) => ReactElement = ({
+const Roller: React.FC<RollerProps> = ({
   dice = [4, 6, 8, 10, 12, 20],
   timeouts,
   callback,
   diceRollFn,
+  defaultTimeout,
+  orientation = "horizontal",
 }) => {
   const [clicks, setClicks] = useState<{ sides: number }[]>([]);
   const [bonus, setBonus] = useState<number>(0);
   const [loadingWidth, setLoadingWidth] = useState<number>(0);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
-  const intervalRef = useRef<number | undefined>(undefined);
+  const intervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
+
+  const debounceTimeout = defaultTimeout || DEFAULT_TIMEOUT;
   const clickCount = clicks.length;
   const waiting = clickCount > 0;
   const timeout = timeouts
-    ? findTimeout(timeouts, clickCount) * DEBOUNCE_TIMEOUT
-    : DEBOUNCE_TIMEOUT;
-
-  const adjustBonus = (amount: number) => {
-    return () => {
-      setBonus((prevBonus) => prevBonus + amount);
-    };
-  };
+    ? findTimeoutMultiplier(timeouts, clickCount) * debounceTimeout
+    : debounceTimeout;
 
   const makeRolls = async () => {
     setClicks((currentClicks) => {
-      let output: Result[] = [];
-      currentClicks.forEach(({ sides }) => {
-        output.push({
-          result: diceRollFn ? diceRollFn(sides) : rollDie(sides),
-          bonus,
-          sides,
-        });
-      });
+      const output: Result[] = currentClicks.map(({ sides }) => ({
+        result: diceRollFn ? diceRollFn(sides) : rollDie(sides),
+        bonus,
+        sides,
+      }));
       callback(output);
       return [];
     });
+    setLoadingWidth(0); // Reset the loading width after rolling
   };
 
   const handleClick = (sides: number) => {
@@ -126,68 +117,68 @@ const Roller: (props: RollerProps) => ReactElement = ({
       }
 
       intervalRef.current = setInterval(() => {
-        setLoadingWidth((prevWidth) => prevWidth + 100 / (timeout / 10));
-        if (loadingWidth >= 100) {
-          clearInterval(intervalRef.current);
-        }
-      }, 10) as unknown as number;
+        setLoadingWidth((prevWidth) => {
+          const increment = 100 / (timeout / 10);
+          const newWidth = prevWidth + increment;
+
+          if (newWidth >= 100) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = undefined;
+            return 100;
+          }
+
+          return newWidth;
+        });
+      }, 0) as unknown as NodeJS.Timeout;
     }
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+        intervalRef.current = undefined;
       }
     };
-  }, [clicks, timeout, loadingWidth]);
+  }, [clicks, timeout]);
 
   const rushRoll = () => {
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
+      debounceRef.current = null;
     }
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
+      intervalRef.current = undefined;
     }
-    loadingWidth < 100 && setLoadingWidth(100);
+    setLoadingWidth(100);
     makeRolls();
   };
 
   return (
-    <div>
-      <h1>Dice Tower</h1>
-      <div className="bg-white text-black grid h-20">
-        <div>hello</div>
-      </div>
+    <div className={`roller-wrapper-${orientation}`}>
       <div>
         <button
-          disabled={!waiting}
+          disabled={true}
           onClick={rushRoll}
-          className={`${
-            waiting ? "loading-button" : ""
-          } bg-white text-black hover:cursor-pointer hover:bg-gray-50 border rounded-sm w-20 active:bg-gray-200 justify-between relative overflow-hidden`}
+          className={`${waiting ? "loading-button" : ""} roll-button`}
         >
-          Roll
+          <div className="roll-button-text">Roll</div>
           <div
-            className="bg-green-500 h-1"
-            style={{ maxWidth: `${(loadingWidth * 90) / 100}px` }}
+            className="timer-indicator"
+            style={{
+              width: "100%",
+              maxWidth: waiting ? `${(loadingWidth * 78) / 100}px` : "0px",
+            }}
           ></div>
         </button>
       </div>
-      <div>
-        <div>{`Bonus: ${bonus}`}</div>
-        <div className="flex flex-row justify-between max-w-20 mb-2">
-          <button
-            className="bg-white text-black hover:cursor-pointer hover:bg-gray-50 border rounded-sm w-9 active:bg-gray-200 justify-between"
-            onClick={adjustBonus(-1)}
-          >
-            -
-          </button>
-          <button
-            className="bg-white text-black hover:cursor-pointer hover:bg-gray-50 border rounded-sm w-9 active:bg-gray-200 justify-between"
-            onClick={adjustBonus(1)}
-          >
-            +
-          </button>
-        </div>
+      <div className="bonus-container">
+        <div>Bonus:</div>
+        <input
+          className="bonus-input"
+          type="number"
+          value={bonus}
+          onChange={(e) => setBonus(parseInt(e.target.value))}
+        />
       </div>
       {dice.map((sides) => (
         <DieButton
