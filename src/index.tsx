@@ -1,45 +1,7 @@
-import React, { useEffect, useRef, useState } from "react";
-
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import "./index.css";
 
-console.log("roller");
 const DEFAULT_TIMEOUT = 1000;
-
-export interface RollerProps {
-  callback: (results: Result[]) => void;
-  orientation?: "vertical" | "horizontal";
-  timeoutMultipliers?: TimeoutsMap;
-  diceRollFn?: (sides: number) => number;
-  dice?: number[];
-  defaultTimeout?: number;
-}
-
-type IconUrl = string;
-
-export type IconMap = {
-  [key: number]: IconUrl;
-};
-
-type DieButtonProps = {
-  sides: number;
-  handleClick: (sides: number) => () => void;
-};
-
-const DieButton = ({ sides, handleClick }: DieButtonProps) => {
-  // const icon = iconMap[sides] ? iconMap[sides] : D12Icon;
-  return (
-    <div className="die-button-wrapper">
-      <div onClick={handleClick(sides)} className="die-button">
-        {/* <img
-            className="h-8 m-1 fill-current stroke-width-1 stroke-black text-red"
-            src={icon}
-            alt=""
-          /> */}
-        <div className="die-button-btn">{`d${sides}`}</div>
-      </div>
-    </div>
-  );
-};
 
 export type Result = { result: number; sides: number; bonus: number };
 
@@ -50,20 +12,42 @@ interface TimeoutsMap {
 export interface RollerProps {
   callback: (results: Result[]) => void;
   orientation?: "vertical" | "horizontal";
-  timeouts?: TimeoutsMap;
+  timeoutMultipliers?: TimeoutsMap;
   diceRollFn?: (sides: number) => number;
   dice?: number[];
   defaultTimeout?: number;
 }
 
-const findTimeoutMultiplier = (timeouts: TimeoutsMap, clickCount: number) => {
-  const keys: number[] = Object.keys(timeouts).map((k) => parseInt(k));
-  let timeoutMultiplier = 1;
+type DieButtonProps = {
+  sides: number;
+  handleClick: (sides: number) => void;
+};
+
+const DieButton = React.memo(({ sides, handleClick }: DieButtonProps) => {
+  return (
+    <div className="die-button-wrapper">
+      <div onClick={() => handleClick(sides)} className="die-button">
+        <div className="die-button-btn">{`d${sides}`}</div>
+      </div>
+    </div>
+  );
+});
+
+const findTimeoutMultiplier = (
+  timeouts: TimeoutsMap | undefined,
+  clickCount: number
+) => {
+  if (!timeouts) return 1;
+  const keys = Object.keys(timeouts)
+    .map((k) => parseInt(k))
+    .sort((a, b) => a - b);
+  if (keys[0] > clickCount) return 1;
   for (const key of keys) {
-    if (key <= clickCount) timeoutMultiplier = timeouts[key];
-    else return timeoutMultiplier;
+    if (clickCount <= key) {
+      return timeouts[key];
+    }
   }
-  return timeoutMultiplier;
+  return timeouts[keys[keys.length - 1]];
 };
 
 const rollDie = (sides: number) => {
@@ -75,95 +59,144 @@ const Roller: React.FC<RollerProps> = ({
   timeoutMultipliers,
   callback,
   diceRollFn,
-  defaultTimeout,
+  defaultTimeout = DEFAULT_TIMEOUT,
   orientation = "horizontal",
 }) => {
   const [clicks, setClicks] = useState<{ sides: number }[]>([]);
   const [bonus, setBonus] = useState<number>(0);
   const [loadingWidth, setLoadingWidth] = useState<number>(0);
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
-  const debounceTimeout = defaultTimeout || DEFAULT_TIMEOUT;
+  const clicksRef = useRef<{ sides: number }[]>([]);
+  const bonusRef = useRef<number>(0);
+
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const startTimeRef = useRef<number | null>(null);
+  const hasRolledRef = useRef<boolean>(false);
+
   const clickCount = clicks.length;
   const waiting = clickCount > 0;
-  const timeout = timeoutMultipliers
-    ? findTimeoutMultiplier(timeoutMultipliers, clickCount) * debounceTimeout
-    : debounceTimeout;
+  const timeoutMultiplier = findTimeoutMultiplier(
+    timeoutMultipliers,
+    clickCount
+  );
+  const timeoutDuration = timeoutMultiplier * defaultTimeout;
 
-  const makeRolls = () => {
-    setClicks((currentClicks) => {
-      const output: Result[] = currentClicks.map(({ sides }) => ({
-        result: diceRollFn ? diceRollFn(sides) : rollDie(sides),
-        bonus,
-        sides,
-      }));
-      callback(output);
-      return [];
-    });
-    setLoadingWidth(0);
-  };
-
-  const handleClick = (sides: number) => {
-    return () => {
-      setClicks((prevClicks) => [...prevClicks, { sides }]);
-      setLoadingWidth(0);
-
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-
-      debounceRef.current = setTimeout(() => {
-        makeRolls();
-      }, timeout);
-    };
-  };
+  // Keep refs in sync with state
+  useEffect(() => {
+    clicksRef.current = clicks;
+  }, [clicks]);
 
   useEffect(() => {
-    if (clicks.length > 0) {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
+    bonusRef.current = bonus;
+  }, [bonus]);
 
-      intervalRef.current = setInterval(() => {
-        setLoadingWidth((prevWidth) => {
-          const increment = 100 / (timeout / 10);
-          const newWidth = prevWidth + increment;
+  const makeRolls = useCallback(() => {
+    if (hasRolledRef.current) {
+      return;
+    }
+    hasRolledRef.current = true;
 
-          // Trigger roll immediately when the bar reaches 100%
-          if (newWidth >= 100) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = undefined;
-            makeRolls(); // Roll as soon as loading is complete
-            return 100;
-          }
-
-          return newWidth;
-        });
-      }, 10) as unknown as NodeJS.Timeout; // Adjust the interval timing to avoid delays
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
     }
 
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = undefined;
+    const output: Result[] = clicksRef.current.map(({ sides }) => ({
+      result: diceRollFn ? diceRollFn(sides) : rollDie(sides),
+      bonus: bonusRef.current,
+      sides,
+    }));
+    callback(output);
+    setClicks([]);
+    setLoadingWidth(0);
+    startTimeRef.current = null;
+  }, [callback, diceRollFn]);
+
+  const animateProgress = useCallback(() => {
+    if (!startTimeRef.current) return;
+
+    const updateProgress = () => {
+      if (!startTimeRef.current) return;
+
+      const elapsed = performance.now() - startTimeRef.current;
+      const progress = Math.min((elapsed / timeoutDuration) * 100, 100);
+      setLoadingWidth(progress);
+
+      if (progress < 100) {
+        animationFrameRef.current = requestAnimationFrame(updateProgress);
+      } else {
+        animationFrameRef.current = null;
       }
     };
-  }, [clicks, timeout]);
 
-  const rushRoll = () => {
-    console.log("rushing roll");
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = null;
+    updateProgress();
+  }, [timeoutDuration]);
+
+  const handleClick = useCallback(
+    (sides: number) => {
+      if (hasRolledRef.current) {
+        hasRolledRef.current = false;
+      }
+
+      setClicks((prevClicks) => {
+        const newClicks = [...prevClicks, { sides }];
+        clicksRef.current = newClicks;
+        return newClicks;
+      });
+
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+
+      startTimeRef.current = performance.now();
+      setLoadingWidth(0);
+
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+
+      animateProgress();
+
+      timeoutRef.current = setTimeout(() => {
+        makeRolls();
+      }, timeoutDuration);
+    },
+    [animateProgress, makeRolls, timeoutDuration]
+  );
+
+  const rushRoll = useCallback(() => {
+    if (hasRolledRef.current) {
+      return;
     }
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = undefined;
+
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
     }
-    setLoadingWidth(100); // Ensure the bar is full when rushed
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
     makeRolls();
-  };
+  }, [makeRolls]);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className={`roller-wrapper-${orientation}`}>
@@ -189,7 +222,7 @@ const Roller: React.FC<RollerProps> = ({
           className="bonus-input"
           type="number"
           value={bonus}
-          onChange={(e) => setBonus(parseInt(e.target.value))}
+          onChange={(e) => setBonus(parseInt(e.target.value) || 0)}
         />
       </div>
       {dice.map((sides) => (
