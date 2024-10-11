@@ -2,6 +2,9 @@
 
 Click a die button to roll a die. Click multiple times to roll multiple dice.
 
+<img width="513" alt="image" src="https://github.com/user-attachments/assets/2ea482f4-30e9-45a0-a4ea-3e6840ae214c">
+
+
 | Option              | Description                                                                                            |
 | ------------------- | ------------------------------------------------------------------------------------------------------ |
 | callback (required) | function called with results of rolls (type Result = { result: number, sides: number, bonus: number }) |
